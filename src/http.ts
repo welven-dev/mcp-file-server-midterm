@@ -1,3 +1,4 @@
+import { rateLimit } from "express-rate-limit";
 import "dotenv/config";
 import express from "express";
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -5,6 +6,13 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { createServer } from "./server.js";
 
 const app = express();
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 100,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+});
+app.use(apiLimiter);
 app.use(express.json({ limit: "1mb" }));
 
 const PORT = Number(process.env.PORT ?? 3000);
