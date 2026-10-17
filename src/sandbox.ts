@@ -5,6 +5,17 @@ export const ROOT = path.resolve(
   process.env.WORKSPACE_ROOT ?? path.join(process.cwd(), "workspace")
 );
 
+function isInside(root: string, target: string): boolean {
+  const relative = path.relative(root, target);
+
+  return (
+    relative === "" ||
+    (relative !== ".." &&
+      !relative.startsWith(`..${path.sep}`) &&
+      !path.isAbsolute(relative))
+  );
+}
+
 export function safePath(userPath: string): string {
   if (typeof userPath !== "string" || userPath.includes("\0")) {
     throw new Error("Invalid path.");
@@ -21,18 +32,15 @@ export function safePath(userPath: string): string {
     throw new Error("Absolute or encoded paths are not allowed.");
   }
 
-  const fullPath = path.resolve(ROOT, userPath);
-  const relativePath = path.relative(ROOT, fullPath);
+  const realRoot = fs.realpathSync(ROOT);
+  const fullPath = path.resolve(realRoot, userPath);
 
-  if (
-    relativePath === ".." ||
-    relativePath.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relativePath)
-  ) {
+  if (!isInside(realRoot, fullPath)) {
     throw new Error("Path escapes the workspace. Not allowed.");
   }
 
-  let currentPath = ROOT;
+  const relativePath = path.relative(realRoot, fullPath);
+  let currentPath = realRoot;
 
   for (const part of relativePath.split(path.sep).filter(Boolean)) {
     currentPath = path.join(currentPath, part);
@@ -42,16 +50,14 @@ export function safePath(userPath: string): string {
 
       if (stat.isSymbolicLink()) {
         const realTarget = fs.realpathSync(currentPath);
-        const realRoot = fs.realpathSync(ROOT);
-        const targetRelative = path.relative(realRoot, realTarget);
 
-        if (
-          targetRelative === ".." ||
-          targetRelative.startsWith(`..${path.sep}`) ||
-          path.isAbsolute(targetRelative)
-        ) {
-          throw new Error("Symbolic link escapes the workspace. Not allowed.");
+        if (!isInside(realRoot, realTarget)) {
+          throw new Error(
+            "Symbolic link escapes the workspace. Not allowed."
+          );
         }
+
+        currentPath = realTarget;
       }
     } catch (error) {
       if (
@@ -63,11 +69,11 @@ export function safePath(userPath: string): string {
 
       const code = (error as NodeJS.ErrnoException).code;
 
-      if (code !== "ENOENT") {
-        throw error;
+      if (code === "ENOENT") {
+        break;
       }
 
-      break;
+      throw error;
     }
   }
 
