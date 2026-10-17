@@ -50,7 +50,7 @@ app.post("/mcp", async (req, res) => {
     if (!sessionId) {
       const server = createServer();
 
-      const transport = new StreamableHTTPServerTransport({
+            const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomBytes(24).toString("hex"),
         onsessioninitialized: (newSessionId) => {
           sessions.set(newSessionId, { server, transport });
@@ -58,6 +58,14 @@ app.post("/mcp", async (req, res) => {
         },
       });
 
+      transport.onclose = () => {
+        const closedSessionId = transport.sessionId;
+
+        if (closedSessionId) {
+          sessions.delete(closedSessionId);
+          console.log("MCP session closed.");
+        }
+      };
       res.on("close", () => {
         // The HTTP response may close while an MCP session remains active.
         // Do not destroy the session here.
