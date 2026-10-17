@@ -130,6 +130,31 @@ app.delete("/mcp", async (req, res) => {
   }
 });
 
+app.use((
+  error: any,
+  _req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+) => {
+  if (res.headersSent) {
+    next(error);
+    return;
+  }
+
+  if (error?.type === "entity.parse.failed") {
+    res.status(400).json({ error: "Malformed JSON request body." });
+    return;
+  }
+
+  if (error?.type === "entity.too.large") {
+    res.status(413).json({ error: "Request body exceeds the 1 MB limit." });
+    return;
+  }
+
+  console.error("HTTP request failed:", error);
+  res.status(500).json({ error: "Internal server error." });
+});
+
 app.listen(PORT, HOST, () => {
   console.log(`Authenticated MCP HTTP server listening on http://${HOST}:${PORT}/mcp`);
 });
